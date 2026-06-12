@@ -116,6 +116,25 @@ export default defineConfig(async ({ mode }) => {
       },
     }
     console.info(`OCRM: proxying Frappe routes to ${devApi}`)
+
+    // src/socket.js statically imports ../../../../sites/common_site_config.json
+    // (a bench path). Running standalone there is no bench above us, so stub the
+    // import with the socketio port. Realtime needs the websocket reachable; in
+    // remote mode it falls back gracefully if not.
+    config.plugins.unshift({
+      name: 'ocrm-stub-common-site-config',
+      enforce: 'pre',
+      resolveId(id) {
+        if (id.replace(/\\/g, '/').endsWith('sites/common_site_config.json')) {
+          return '\0ocrm-common-site-config'
+        }
+      },
+      load(id) {
+        if (id === '\0ocrm-common-site-config') {
+          return 'export const socketio_port = 9000\nexport default { socketio_port: 9000 }'
+        }
+      },
+    })
   }
 
   return config
