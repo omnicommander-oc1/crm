@@ -48,21 +48,24 @@ jobs:
 
       - name: Render apps.json
         run: |
-          cat > apps.json <<JSON
+          # The custom Containerfile consumes apps.json as a BuildKit *secret*
+          # (mount id=apps_json), used directly as `bench init --apps_path`. It
+          # must be RAW JSON (not base64), listing apps in addition to frappe.
+          cat > "$GITHUB_WORKSPACE/apps.json" <<JSON
           [
             { "url": "https://github.com/${{ github.repository }}", "branch": "${{ env.CRM_BRANCH }}" }
           ]
           JSON
-          echo "APPS_JSON_BASE64=$(base64 -w0 apps.json)" >> "$GITHUB_ENV"
+          cat "$GITHUB_WORKSPACE/apps.json"
 
       - name: Build & push image
         working-directory: frappe_docker
         run: |
           REG="${{ steps.ecr.outputs.registry }}"
           docker buildx build \
+            --secret id=apps_json,src="$GITHUB_WORKSPACE/apps.json" \
             --build-arg=FRAPPE_PATH=https://github.com/frappe/frappe \
             --build-arg=FRAPPE_BRANCH="${{ env.FRAPPE_BRANCH }}" \
-            --build-arg=APPS_JSON_BASE64="$APPS_JSON_BASE64" \
             --tag="$REG/${{ env.ECR_REPO }}:${{ env.IMAGE_TAG }}" \
             --file=images/custom/Containerfile \
             --push .
