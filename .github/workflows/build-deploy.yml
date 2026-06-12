@@ -1,0 +1,95 @@
+name: Build & Deploy OCRM image
+
+# Builds the Frappe CRM custom image (frappe + this fork's crm app) via
+# frappe_docker, pushes it to ECR, then triggers the ec2-ocrm host to pull and
+# recreate its containers over SSM. Reuses the shared github-backend-role OIDC.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  AWS_ACCOUNT_ID: "430611422514"
+  ECR_REPO: ocrm
+  IMAGE_TAG: dev-latest
+  INSTANCE_TAG_SERVICE: ocrm
+  # Pin these deliberately rather than tracking moving branches.
+  FRAPPE_BRANCH: version-15
+  CRM_BRANCH: main
+  FRAPPE_DOCKER_REF: main
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/github-backend-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Checkout frappe_docker (build context)
+        uses: actions/checkout@v4
+        with:
+          repository: frappe/frappe_docker
+          ref: ${{ env.FRAPPE_DOCKER_REF }}
+          path: frappe_docker
+
+      - name: Render apps.json
+        run: |
+          cat > apps.json <<JSON
+          [
+            { "url": "https://github.com/${{ github.repository }}", "branch": "${{ env.CRM_BRANCH }}" }
+          ]
+          JSON
+          echo "APPS_JSON_BASE64=$(base64 -w0 apps.json)" >> "$GITHUB_ENV"
+
+      - name: Build & push image
+        working-directory: frappe_docker
+        run: |
+          REG="${{ steps.ecr.outputs.registry }}"
+          docker buildx build \
+            --build-arg=FRAPPE_PATH=https://github.com/frappe/frappe \
+            --build-arg=FRAPPE_BRANCH="${{ env.FRAPPE_BRANCH }}" \
+            --build-arg=APPS_JSON_BASE64="$APPS_JSON_BASE64" \
+            --tag="$REG/${{ env.ECR_REPO }}:${{ env.IMAGE_TAG }}" \
+            --file=images/custom/Containerfile \
+            --push .
+
+      - name: Resolve target instance
+        id: ec2
+        run: |
+          ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=${{ env.INSTANCE_TAG_SERVICE }}" \
+                      "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' --output text)
+          test -n "$ID" || { echo "No running ocrm instance found"; exit 1; }
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy via SSM (pull & recreate)
+        run: |
+          CMD=$(aws ssm send-command \
+            --instance-ids "${{ steps.ec2.outputs.id }}" \
+            --document-name AWS-RunShellScript \
+            --comment "OCRM deploy ${{ github.sha }}" \
+            --parameters 'commands=["/opt/ocrm/compose.sh pull","/opt/ocrm/compose.sh up -d --remove-orphans"]' \
+            --query 'Command.CommandId' --output text)
+          echo "Command: $CMD"
+          aws ssm wait command-executed \
+            --command-id "$CMD" --instance-id "${{ steps.ec2.outputs.id }}" || true
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$CMD" --instance-id "${{ steps.ec2.outputs.id }}" \
+            --query 'Status' --output text)
+          echo "Deploy status: $STATUS"
+          [ "$STATUS" = "Success" ]
