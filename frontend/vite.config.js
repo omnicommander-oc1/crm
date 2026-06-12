@@ -74,10 +74,17 @@ export default defineConfig(async ({ mode }) => {
     },
   }
 
+  // OCRM: opt-in remote dev proxy. Set OCRM_DEV_API to a deployed Frappe backend
+  // (e.g. https://dev-ocrm.omnicommando.com) to run this Vite dev server against
+  // the dev API + DB instead of a local bench. frappe-ui's built-in frappeProxy
+  // only targets localhost:8000, so when OCRM_DEV_API is set we disable it and
+  // wire our own HTTPS proxy. Unset => unchanged default (local bench) behavior.
+  const devApi = isDev && process.env.OCRM_DEV_API
+
   const frappeui = await importFrappeUIPlugin(isDev, config)
   config.plugins.unshift(
     frappeui({
-      frappeProxy: true,
+      frappeProxy: !devApi,
       lucideIcons: true,
       jinjaBootData: true,
       buildConfig: {
@@ -87,6 +94,29 @@ export default defineConfig(async ({ mode }) => {
       },
     }),
   )
+
+  if (devApi) {
+    // changeOrigin → Host becomes the backend host, so the ALB host-header rule
+    // matches and the single-site frontend resolves. cookieDomainRewrite scopes
+    // the session cookie to localhost. The backend site needs `ignore_csrf: 1`
+    // for dev (jinjaBootData only injects the CSRF token in production builds).
+    const remote = {
+      target: devApi,
+      changeOrigin: true,
+      secure: true,
+      ws: true,
+      cookieDomainRewrite: '',
+    }
+    config.server = {
+      ...config.server,
+      port: 8080,
+      proxy: {
+        '^/(app|api|assets|files|private|method|login|desk)': remote,
+        '^/socket.io': remote,
+      },
+    }
+    console.info(`OCRM: proxying Frappe routes to ${devApi}`)
+  }
 
   return config
 })
