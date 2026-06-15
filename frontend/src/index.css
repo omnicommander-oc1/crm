@@ -1,4 +1,5 @@
 @import 'frappe-ui/style.css';
+@import './ocrm-theme.css'; /* OMNICOMMANDER overrides — must come after frappe-ui */
 
 @layer components {
   .prose-f {

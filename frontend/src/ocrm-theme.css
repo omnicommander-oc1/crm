@@ -1,0 +1,96 @@
+/*
+ * OMNICOMMANDER skin for OCRM (Frappe CRM fork).
+ *
+ * frappe-ui drives its whole theme through CSS custom properties emitted by its
+ * Tailwind plugin (see node_modules/frappe-ui/tailwind/colors.js): a `:root`
+ * block for light and a `[data-theme='dark']` block for dark. Values are
+ * space-separated RGB triplets so Tailwind can apply opacity, e.g.
+ * `rgb(var(--surface-gray-7) / <alpha>)`. We override only the tokens that
+ * carry brand meaning so this survives frappe-ui upgrades. Do NOT edit
+ * node_modules. This file is imported AFTER 'frappe-ui/style.css' in index.css.
+ *
+ * Brand tokens (from oc-design-system/DESIGN.md):
+ *   primary  #662C90 -> 102 44 144      dark-100 #13071D -> 19 7 29
+ *   hover    #5A2680 ->  90 38 128      dark-200 #1E0B28 -> 30 11 40
+ *   active   #4C206C ->  76 32 108      dark-300 #261237 -> 38 18 55
+ *   hl-200   #8A5AB8 -> 138 90 184      dark-400 #441F63 -> 68 31 99
+ *   hl-300   #A975E0 -> 169 117 224     purple-100 #F4E7FF -> 244 231 255
+ *   hl-400   #C99AFF -> 201 154 255     purple-400 #D88AFF -> 216 138 255
+ */
+
+/* ---- Typography: Century Gothic everywhere (matches DESIGN.md §3) ---- */
+@font-face {
+  font-family: 'Century Gothic';
+  src: url('./assets/fonts/centurygothic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Century Gothic';
+  src: url('./assets/fonts/centurygothic_bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* frappe-ui sets `InterVar` on html via @layer base; an unlayered rule wins. */
+html,
+body,
+button,
+input,
+select,
+textarea,
+.form-input,
+.form-select,
+.form-textarea {
+  font-family: 'Century Gothic', 'CenturyGothic', 'AppleGothic', ui-sans-serif,
+    system-ui, sans-serif;
+}
+
+/* ---- Light theme: brand-purple accent on clean neutrals ---- */
+:root {
+  /* Primary/solid surface (solid buttons, strong chips, active nav fill) */
+  --surface-gray-7: 102 44 144;
+  --surface-gray-6: 90 38 128; /* hover */
+  --surface-gray-5: 76 32 108; /* active */
+
+  /* Interactive accent ramp (links, accent icons, info/selected states) */
+  --text-ink-blue-2: 102 44 144;
+  --text-ink-blue-3: 76 32 108;
+  --surface-blue-1: 244 231 255; /* light accent surface (#F4E7FF) */
+  --surface-blue-2: 102 44 144; /* solid accent surface */
+  --outline-blue-1: 216 138 255;
+  --outline-blue-2: 102 44 144;
+}
+
+/* ---- Dark theme: purple-tinted shell (mirrors oc-studio) ---- */
+[data-theme='dark'] {
+  /* App shell / sidebar / base background */
+  --surface-white: 19 7 29; /* #13071D */
+  --surface-menu-bar: 19 7 29;
+
+  /* Panels & cards */
+  --surface-gray-1: 30 11 40; /* #1E0B28 */
+  --surface-gray-2: 38 18 55; /* #261237 */
+  --surface-gray-3: 38 18 55;
+  --surface-cards: 30 11 40;
+  --surface-modal: 38 18 55;
+  --surface-selected: 68 31 99; /* #441F63 selected row */
+
+  /* Borders / dividers */
+  --outline-gray-1: 68 31 99; /* #441F63 */
+  --outline-gray-2: 68 31 99;
+  --outline-gray-modals: 68 31 99;
+
+  /* Primary/solid surface -> bright purple, legible on the dark shell */
+  --surface-gray-7: 201 154 255; /* #C99AFF */
+  --surface-gray-6: 169 117 224; /* #A975E0 */
+  --surface-gray-5: 138 90 184; /* #8A5AB8 */
+
+  /* Accent text/links on dark must use the lighter purple for contrast */
+  --text-ink-blue-2: 169 117 224; /* #A975E0 */
+  --text-ink-blue-3: 201 154 255; /* #C99AFF */
+  --surface-blue-2: 102 44 144;
+  --outline-blue-2: 169 117 224;
+}
